@@ -11,12 +11,12 @@ VIDEOSEG        equ 0B800h
 TOP_GAP         equ 0h
 LEFT_GAP        equ 1h
 
-FRAME_LENGTH    equ 12h
-FRAME_HEIGHT    equ 0Ah
+FRAME_LENGTH    equ 0Dh
+FRAME_HEIGHT    equ 0Eh
 
 FRAME_COLOR     equ 0Fh
 
-START_X         equ 3Ch
+START_X         equ 41h
 START_Y         equ 1h
 
 TERMINAL_LEN    equ 50h
@@ -146,24 +146,95 @@ endp
 
 RegistersValue  proc
 
-    push ax di
+    mov cs:Save_ax, ax
+    mov cs:Save_di, di
 
+;---------------AX-----------------
     mov di, offset Str_ax + 05h         ; 5 = strlen ('ax = ')
     call ValToStr
+;---------------------------------
 
+;---------------BX-----------------
     mov ax, bx
     mov di, offset Str_bx + 05h
     call ValToStr
+;---------------------------------
 
+;---------------CX-----------------
     mov ax, cx
     mov di, offset Str_cx + 05h
     call ValToStr
+;---------------------------------
 
+;---------------DX-----------------
     mov ax, dx
     mov di, offset Str_dx + 05h
     call ValToStr
+;---------------------------------
 
-    pop di ax
+;---------------SI-----------------
+    mov ax, si
+    mov di, offset Str_si + 05h
+    call ValToStr
+;---------------------------------
+
+;---------------DI-----------------
+    pop di
+    mov ax, di
+    push di
+    mov di, offset Str_di + 05h
+    call ValToStr
+;---------------------------------
+
+;---------------BP-----------------
+    mov ax, bp
+    mov di, offset Str_bp + 05h
+    call ValToStr
+;---------------------------------
+
+;---------------SP-----------------
+    mov ax, sp
+    sub ax, 05h
+    mov di, offset Str_sp + 05h
+    call ValToStr
+;---------------------------------
+
+;---------------DS-----------------
+    mov ax, ds
+    mov di, offset Str_ds + 05h
+    call ValToStr
+;---------------------------------
+
+;---------------ES-----------------
+    mov ax, es
+    mov di, offset Str_es + 05h
+    call ValToStr
+;---------------------------------
+
+;---------------SS-----------------
+    mov ax, ss
+    mov di, offset Str_ss + 05h
+    call ValToStr
+;---------------------------------
+
+    pop cs:Save_ret_val_RV cs:Save_ret_val_MYTC cs:Save_ip cs:Save_cs
+
+;---------------CS-----------------
+    mov ax, cs:Save_cs
+    mov di, offset Str_cs + 05h
+    call ValToStr
+;---------------------------------
+
+;---------------IP-----------------
+    mov ax, cs:Save_ip
+    mov di, offset Str_ip + 05h
+    call ValToStr
+;---------------------------------
+
+    push cs:Save_cs cs:Save_ip cs:Save_ret_val_MYTC cs:Save_ret_val_RV
+
+    mov ax, cs:Save_ax
+    mov di, cs:Save_di
 
     ret
 
@@ -174,10 +245,31 @@ endp
 
 ; --------------------
 
+Save_ax dw 0h
+Save_di dw 0h
+Save_ip dw 0h
+Save_cs dw 0h
+
+Save_ret_val_RV   dw 0h
+Save_ret_val_MYTC dw 0h
+
 Str_ax db 'ax = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
 Str_bx db 'bx = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
 Str_cx db 'cx = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
-Str_dx db 'dx = ', 0FFh, 0FFh, 0FFh, 0FFh, END_SYM
+Str_dx db 'dx = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
+
+Str_si db 'si = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
+Str_di db 'di = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
+
+Str_bp db 'bp = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
+Str_sp db 'sp = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
+
+Str_ds db 'ds = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
+Str_es db 'es = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
+Str_ss db 'ss = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
+Str_cs db 'cs = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
+
+Str_ip db 'ip = ', 0FFh, 0FFh, 0FFh, 0FFh, END_SYM
 
 ; --------------------
 
