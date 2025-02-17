@@ -6,6 +6,10 @@ locals ll
 
 HOT_KEY         equ 3Ah
 
+BUTTON_CTRL     equ 0006h
+MOUSE_BUTTON    equ 0h          ; 0 = left | 1 = right | 2 = center
+CHECK_MOUSE     equ 1h          ; 1 = left | 2 = right | 4 = center
+
 VIDEOSEG        equ 0B800h
 
 TOP_GAP         equ 0h
@@ -15,9 +19,6 @@ FRAME_LENGTH    equ 0Dh
 FRAME_HEIGHT    equ 0Eh
 
 FRAME_COLOR     equ 0Fh
-
-START_X         equ 41h
-START_Y         equ 1h
 
 TERMINAL_LEN    equ 50h
 
@@ -148,8 +149,40 @@ TimeControl proc
     mov al, cs:Activity
     cmp al, 0h
     pop ax
-
     je llRealTimeCtrl
+
+    push dx cx bx ax
+
+    mov ax, BUTTON_CTRL
+    mov bx, MOUSE_BUTTON
+
+    int 33h
+    shr cx, 03h
+    shr dx, 03h
+
+    and ax, CHECK_MOUSE
+    cmp ax, CHECK_MOUSE
+    jne llStop_mouse
+
+    cmp cs:Mouse_Activity, 0FFh
+    jne llStart_mouse
+
+llMouse_coordinates:
+
+    add cs:START_X, cl
+    mov al, cs:Mouse_X
+    sub cs:START_X, al
+
+    add cs:START_Y, dl
+    mov al, cs:Mouse_Y
+    sub cs:START_Y, al
+
+    mov cs:Mouse_X, cl
+    mov cs:Mouse_Y, dl
+
+llComplete:
+
+    pop ax bx cx dx
 
     call MyTimeCtrl
 
@@ -161,11 +194,27 @@ RealTimeCtrlSeg dw 0h
 
     iret
 
+llStop_mouse:
+    mov cs:Mouse_Activity, 0h
+    mov cs:Mouse_X, 0FFh
+    mov cs:Mouse_Y, 0FFh
+    jmp llComplete
+
+llStart_mouse:
+    mov cs:Mouse_Activity, 0FFh
+    mov cs:Mouse_X, cl
+    mov cs:Mouse_Y, dl
+    jmp llMouse_coordinates
+
 endp
 
 ; --------------------
 
 Activity db 0h
+
+Mouse_Activity db 0h
+Mouse_X db 0h
+Mouse_Y db 0h
 
 ; -------MY-TC--------
 
@@ -415,15 +464,15 @@ MakeFrame  proc
     mov al, FRAME_LENGTH
     mov ah, FRAME_HEIGHT
 
-    mov cl, START_X
-    mov ch, START_Y
+    mov cl, cs:START_X
+    mov ch, cs:START_Y
 
     mov bx, offset FramePattern
 
     call DrawFrame
 
-    mov cl, START_X
-    mov ch, START_Y
+    mov cl, cs:START_X
+    mov ch, cs:START_Y
 
     mov dx, offset Str_ax
 
@@ -436,6 +485,9 @@ endp
 ; --------------------
 
 ; -------FRAME--------
+
+START_X         db 41h
+START_Y         db 1h
 
 ;---------------------------------
 ; The function used VIDEOSEG

@@ -16,10 +16,11 @@ FRAME_HEIGHT    equ 0Eh
 
 FRAME_COLOR     equ 0Fh
 
-START_X         equ 41h
-START_Y         equ 1h
-
 TERMINAL_LEN    equ 50h
+TERMINAL_HEIGHT equ 19h
+
+START_X_COOR    equ 41h
+START_Y_COOR    equ 1h
 
 END_SYM         equ 0h
 
@@ -66,6 +67,33 @@ KeyControl proc
 
     in al, 60h
 
+    call CheckHotKey
+
+    call CheckMovement
+
+    pop cx bx ax
+
+    db 0eah
+RealKeyCtrlOfs dw 0h
+RealKeyCtrlSeg dw 0h
+
+    iret
+
+endp
+
+; --------------------
+
+
+;---------------------------------
+; Check if hot key is pressed
+;
+; Entry:  AL
+; Exit:   CS:Activity, Letters activity
+; Destrs: BX, CX
+;---------------------------------
+
+CheckHotKey proc
+
     mov bx, offset Letter_D
 
     cmp al, cs:[bx]
@@ -83,13 +111,7 @@ KeyControl proc
 
 llDone:
 
-    pop cx bx ax
-
-    db 0eah
-RealKeyCtrlOfs dw 0h
-RealKeyCtrlSeg dw 0h
-
-    iret
+    ret
 
 llChange_letter_activity:
     inc bx
@@ -111,6 +133,16 @@ llChange_letter_activity:
 
 llChange_activity:
     xor cs:Activity, 0FFh
+
+    cmp cs:Activity, 0h
+    je llStart_frame_pos
+
+    jmp llDone
+
+llStart_frame_pos:
+    mov cs:START_X, START_X_COOR
+    mov cs:START_Y, START_Y_COOR
+
     jmp llDone
 
 llDestroy_letter_activity:
@@ -131,13 +163,85 @@ endp
 
 ; --------------------
 
-; --------------------
-
 Letter_D db 20h, 0h
 Letter_E db 12h, 0h
 Letter_N db 31h, 0h
 
 ; --------------------
+
+
+;---------------------------------
+; Check if move's keys are pressed
+;
+; Entry:  AL
+; Exit:   CS:Activity, Letters activity
+; Destrs: BX
+;---------------------------------
+
+CheckMovement proc
+
+    cmp cs:Activity, 0FFh
+    jne llDone
+
+    mov bx, offset UP
+    cmp al, cs:[bx]
+    je llUp
+
+    inc bx
+    cmp al, cs:[bx]
+    je llLeft
+
+    inc bx
+    cmp al, cs:[bx]
+    je llRight
+
+    inc bx
+    cmp al, cs:[bx]
+    je llDown
+
+llDone:
+
+    ret
+
+llUp:
+    cmp cs:START_Y, 0h
+    je llDone
+
+    dec cs:START_Y
+    jmp llDone
+
+llLeft:
+    cmp cs:START_X, 0h
+    je llDone
+
+    dec cs:START_X
+    jmp llDone
+
+llRight:
+    cmp cs:START_X, TERMINAL_LEN - FRAME_LENGTH
+    je llDone
+
+    inc cs:START_X
+    jmp llDone
+
+llDown:
+    cmp cs:START_Y, TERMINAL_HEIGHT - FRAME_HEIGHT
+    je llDone
+
+    inc cs:START_Y
+    jmp llDone
+
+endp
+
+; --------------------
+
+UP    db 11h
+LEFT  db 1Eh
+RIGHT db 20h
+DOWN  db 1Fh
+
+; --------------------
+
 
 ; --------TC----------
 
@@ -148,8 +252,9 @@ TimeControl proc
     mov al, cs:Activity
     cmp al, 0h
     pop ax
-
     je llRealTimeCtrl
+
+llComplete:
 
     call MyTimeCtrl
 
@@ -415,15 +520,15 @@ MakeFrame  proc
     mov al, FRAME_LENGTH
     mov ah, FRAME_HEIGHT
 
-    mov cl, START_X
-    mov ch, START_Y
+    mov cl, cs:START_X
+    mov ch, cs:START_Y
 
     mov bx, offset FramePattern
 
     call DrawFrame
 
-    mov cl, START_X
-    mov ch, START_Y
+    mov cl, cs:START_X
+    mov ch, cs:START_Y
 
     mov dx, offset Str_ax
 
@@ -436,6 +541,9 @@ endp
 ; --------------------
 
 ; -------FRAME--------
+
+START_X         db 41h
+START_Y         db 1h
 
 ;---------------------------------
 ; The function used VIDEOSEG
