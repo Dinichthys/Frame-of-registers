@@ -4,8 +4,6 @@
 org 100h
 locals ll
 
-HOT_KEY         equ 3Ah
-
 VIDEOSEG        equ 0B800h
 
 TOP_GAP         equ 0h
@@ -23,6 +21,14 @@ START_X_COOR    equ 41h
 START_Y_COOR    equ 1h
 
 END_SYM         equ 0h
+
+ESC_SCAN_CODE   equ 1h
+F4_SCAN_CODE    equ 3Eh
+
+MOVE_UP         equ 11h
+MOVE_LEFT       equ 1Eh
+MOVE_RIGHT      equ 20h
+MOVE_DOWN       equ 1Fh
 
 ; -------MAIN---------
 
@@ -52,7 +58,7 @@ Main:
     sti                                 ; End of changing
 
     mov ax, 3100h
-    mov dx, offset END_LABEL
+    mov dx, TERMINAL_LEN * TERMINAL_HEIGHT * 2 + offset END_LABEL
     shr dx, 4
     inc dx
     int 21h
@@ -67,9 +73,11 @@ KeyControl proc
 
     in al, 60h
 
-    call CheckHotKey
+    call CheckOpenFile
 
     call CheckMovement
+
+    call CheckHotKey
 
     pop cx bx ax
 
@@ -78,6 +86,34 @@ RealKeyCtrlOfs dw 0h
 RealKeyCtrlSeg dw 0h
 
     iret
+
+endp
+
+; --------------------
+
+
+;---------------------------------
+; Check if file is opened
+;
+; Entry:  AL
+; Exit:   CS:First_print
+; Destrs: BX
+;---------------------------------
+
+CheckOpenFile proc
+
+    cmp al, ESC_SCAN_CODE
+    je llNewBackGround
+
+    cmp al, F4_SCAN_CODE
+    je llNewBackGround
+
+llDone:
+    ret
+
+llNewBackGround:
+    mov cs:First_print, 0FFh
+    jmp llDone
 
 endp
 
@@ -140,6 +176,10 @@ llChange_activity:
     jmp llDone
 
 llStart_frame_pos:
+    mov cs:MOVED, 05h
+    call StorageBackground
+    mov cs:MOVED, 0h
+
     mov cs:START_X, START_X_COOR
     mov cs:START_Y, START_Y_COOR
 
@@ -167,6 +207,8 @@ Letter_D db 20h, 0h
 Letter_E db 12h, 0h
 Letter_N db 31h, 0h
 
+First_print db 0FFh
+
 ; --------------------
 
 
@@ -175,7 +217,7 @@ Letter_N db 31h, 0h
 ;
 ; Entry:  AL
 ; Exit:   CS:Activity, Letters activity
-; Destrs: BX
+; Destrs: None
 ;---------------------------------
 
 CheckMovement proc
@@ -183,20 +225,16 @@ CheckMovement proc
     cmp cs:Activity, 0FFh
     jne llDone
 
-    mov bx, offset UP
-    cmp al, cs:[bx]
+    cmp al, MOVE_UP
     je llUp
 
-    inc bx
-    cmp al, cs:[bx]
+    cmp al, MOVE_LEFT
     je llLeft
 
-    inc bx
-    cmp al, cs:[bx]
+    cmp al, MOVE_RIGHT
     je llRight
 
-    inc bx
-    cmp al, cs:[bx]
+    cmp al, MOVE_DOWN
     je llDown
 
 llDone:
@@ -207,12 +245,21 @@ llUp:
     cmp cs:START_Y, 0h
     je llDone
 
+    mov cs:MOVED, 01h
+    call StorageBackground
+    mov cs:MOVED, 0h
+
     dec cs:START_Y
     jmp llDone
 
 llLeft:
     cmp cs:START_X, 0h
     je llDone
+
+    mov cs:MOVED, 02h
+    call StorageBackground
+    mov cs:MOVED, 0h
+
 
     dec cs:START_X
     jmp llDone
@@ -221,12 +268,22 @@ llRight:
     cmp cs:START_X, TERMINAL_LEN - FRAME_LENGTH
     je llDone
 
+    mov cs:MOVED, 03h
+    call StorageBackground
+    mov cs:MOVED, 0h
+
+
     inc cs:START_X
     jmp llDone
 
 llDown:
-    cmp cs:START_Y, TERMINAL_HEIGHT - FRAME_HEIGHT
+    cmp cs:START_Y, TERMINAL_HEIGHT - FRAME_HEIGHT - 1
     je llDone
+
+    mov cs:MOVED, 04h
+    call StorageBackground
+    mov cs:MOVED, 0h
+
 
     inc cs:START_Y
     jmp llDone
@@ -235,10 +292,7 @@ endp
 
 ; --------------------
 
-UP    db 11h
-LEFT  db 1Eh
-RIGHT db 20h
-DOWN  db 1Fh
+MOVED db 0h
 
 ; --------------------
 
@@ -247,11 +301,7 @@ DOWN  db 1Fh
 
 TimeControl proc
 
-    push ax
-
-    mov al, cs:Activity
-    cmp al, 0h
-    pop ax
+    cmp cs:Activity, 0h
     je llRealTimeCtrl
 
 llComplete:
@@ -276,6 +326,13 @@ Activity db 0h
 
 MyTimeCtrl proc
 
+    cmp cs:First_print, 0FFh
+    jne llComplete
+
+    call LoadBackground
+    mov cs:First_print, 0h
+
+llComplete:
     call RegistersValue
 
     push ax bx cx dx es si di
@@ -290,6 +347,175 @@ endp
 
 ; --------------------
 
+
+;---------------------------------
+; It loads the background of the frame
+;
+; Entry:  START_X, START_Y
+; Exit:   Background:
+; Destrs: None
+;---------------------------------
+
+LoadBackground  proc
+
+    cld
+
+    push ax cx ds es si di
+
+    mov ax, VIDEOSEG
+    mov ds, ax
+
+    mov si, 0h
+
+    mov cx, TERMINAL_HEIGHT
+    imul cx, cx, TERMINAL_LEN
+
+    mov ax, cs
+    mov es, ax
+
+    mov di, offset Background
+
+rep movsw
+
+    pop di si es ds cx ax
+
+    ret
+
+endp
+
+; --------------------
+
+
+;---------------------------------
+; It storage the background of the frame
+;
+; Entry:  CS:MOVED, START_X, START_Y, Background:
+; Exit:   VIDEOSEG
+; Destrs: None
+;---------------------------------
+
+StorageBackground  proc
+
+    cld
+
+    push ax bx cx ds es si di
+
+    mov bx, offset JumpTableMovement
+    mov al, cs:MOVED
+    mov ah, 0h
+    dec ax
+    shl ax, 01h
+    add bx, ax
+    mov bx, cs:[bx]
+    jmp bx
+
+llComplete:
+
+    mov si, ax
+    mov di, ax
+    add si, offset Background
+
+    mov ax, VIDEOSEG
+    mov es, ax
+
+    mov ax, cs
+    mov ds, ax
+
+    add ax, TERMINAL_LEN * FRAME_HEIGHT * 2
+
+llWhile:
+    mov cx, FRAME_LENGTH
+
+rep movsw
+
+    add si, TERMINAL_LEN * 2 - FRAME_LENGTH * 2
+    add di, TERMINAL_LEN * 2 - FRAME_LENGTH * 2
+
+    cmp ax, di
+    ja llWhile
+
+    pop di si es ds cx bx ax
+
+    ret
+
+UpMovement:
+
+    mov al, cs:START_Y
+    inc al
+    mov ah, 0h
+    imul ax, ax, TERMINAL_LEN
+    mov cl, cs:START_X
+    mov ch, 0h
+    add ax, cx
+    shl ax, 01h
+
+    jmp llComplete
+
+LeftMovement:
+
+    mov al, cs:START_Y
+    mov ah, 0h
+    imul ax, ax, TERMINAL_LEN
+    mov cl, cs:START_X
+    inc cl
+    mov ch, 0h
+    add ax, cx
+    shl ax, 01h
+
+    jmp llComplete
+
+RightMovement:
+
+    mov al, cs:START_Y
+    mov ah, 0h
+    imul ax, ax, TERMINAL_LEN
+    mov cl, cs:START_X
+    dec cl
+    mov ch, 0h
+    add ax, cx
+    shl ax, 01h
+
+    jmp llComplete
+
+DownMovement:
+
+    mov al, cs:START_Y
+    dec al
+    mov ah, 0h
+    imul ax, ax, TERMINAL_LEN
+    mov cl, cs:START_X
+    mov ch, 0h
+    add ax, cx
+    shl ax, 01h
+
+    jmp llComplete
+
+NoMovement:
+
+    mov al, cs:START_Y
+    mov ah, 0h
+    imul ax, ax, TERMINAL_LEN
+    mov cl, cs:START_X
+    mov ch, 0h
+    add ax, cx
+    shl ax, 01h
+
+    jmp llComplete
+
+endp
+
+; --------------------
+
+; --------------------
+
+JumpTableMovement:
+    dw offset UpMovement
+    dw offset LeftMovement
+    dw offset RightMovement
+    dw offset DownMovement
+    dw offset NoMovement
+
+; --------------------
 
 ;---------------------------------
 ; It translates registers values
@@ -542,8 +768,8 @@ endp
 
 ; -------FRAME--------
 
-START_X         db 41h
-START_Y         db 1h
+START_X db 41h
+START_Y db 1h
 
 ;---------------------------------
 ; The function used VIDEOSEG
@@ -737,5 +963,7 @@ endp
 ;--------------------------------
 
 END_LABEL:
+
+Background:
 
 end Main
