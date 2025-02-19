@@ -24,6 +24,8 @@ END_SYM         equ 0h
 
 ESC_SCAN_CODE   equ 1h
 F4_SCAN_CODE    equ 3Eh
+SHIFT_PRESS     equ 2Ah
+SHIFT_RELEASE   equ 0AAh
 
 MOVE_UP         equ 11h
 MOVE_LEFT       equ 1Eh
@@ -75,7 +77,16 @@ KeyControl proc
 
     call CheckOpenFile
 
+    cmp cs:Shift_pressed, 0h
+    je llDontMove
+
     call CheckMovement
+    cmp cs:MOVED, 0h
+    jne llSkip
+
+llDontMove:
+
+    call CheckShift
 
     call CheckHotKey
 
@@ -84,6 +95,21 @@ KeyControl proc
     db 0eah
 RealKeyCtrlOfs dw 0h
 RealKeyCtrlSeg dw 0h
+
+llSkip:
+    mov cs:MOVED, 0h
+
+    in al, 61h
+    mov ah, al
+    or al, 80h
+    out 61h, al
+    mov al, ah
+    out 61h, al
+
+    mov al, 20h
+    out 20h, al
+
+    pop cx bx ax
 
     iret
 
@@ -180,6 +206,8 @@ llStart_frame_pos:
     call StorageBackground
     mov cs:MOVED, 0h
 
+    mov cs:First_print, 0FFh
+
     mov cs:START_X, START_X_COOR
     mov cs:START_Y, START_Y_COOR
 
@@ -208,6 +236,38 @@ Letter_E db 12h, 0h
 Letter_N db 31h, 0h
 
 First_print db 0FFh
+
+; --------------------
+
+
+;---------------------------------
+; Check if shift was pressed
+;
+; Entry:  AL
+; Exit:   CS:First_print
+; Destrs: BX
+;---------------------------------
+
+CheckShift proc
+
+    cmp al, SHIFT_PRESS
+    je llPressed
+
+    cmp al, SHIFT_RELEASE
+    je llReleased
+
+llDone:
+    ret
+
+llPressed:
+    mov cs:Shift_pressed, 0FFh
+    jmp llDone
+
+llReleased:
+    mov cs:Shift_pressed, 0h
+    jmp llDone
+
+endp
 
 ; --------------------
 
@@ -247,7 +307,6 @@ llUp:
 
     mov cs:MOVED, 01h
     call StorageBackground
-    mov cs:MOVED, 0h
 
     dec cs:START_Y
     jmp llDone
@@ -258,8 +317,6 @@ llLeft:
 
     mov cs:MOVED, 02h
     call StorageBackground
-    mov cs:MOVED, 0h
-
 
     dec cs:START_X
     jmp llDone
@@ -270,8 +327,6 @@ llRight:
 
     mov cs:MOVED, 03h
     call StorageBackground
-    mov cs:MOVED, 0h
-
 
     inc cs:START_X
     jmp llDone
@@ -282,8 +337,6 @@ llDown:
 
     mov cs:MOVED, 04h
     call StorageBackground
-    mov cs:MOVED, 0h
-
 
     inc cs:START_Y
     jmp llDone
@@ -291,6 +344,8 @@ llDown:
 endp
 
 ; --------------------
+
+Shift_pressed db 0h
 
 MOVED db 0h
 
