@@ -32,6 +32,11 @@ MOVE_LEFT       equ 1Eh
 MOVE_RIGHT      equ 20h
 MOVE_DOWN       equ 1Fh
 
+MOVE_PAGE_UP    equ 48h
+MOVE_PAGE_LEFT  equ 75h
+MOVE_PAGE_RIGHT equ 77h
+MOVE_PAGE_DOWN  equ 80h
+
 ; -------MAIN---------
 
 Main:
@@ -85,6 +90,8 @@ KeyControl proc
     jne llSkip
 
 llDontMove:
+
+    call CheckPageMovement
 
     call CheckShift
 
@@ -265,6 +272,76 @@ llPressed:
 
 llReleased:
     mov cs:Shift_pressed, 0h
+    jmp llDone
+
+endp
+
+; --------------------
+
+
+;---------------------------------
+; Check if page move's keys are pressed
+;
+; Entry:  AL
+; Exit:   CS:Activity, Letters activity
+; Destrs: None
+;---------------------------------
+
+CheckPageMovement proc
+
+    cmp cs:Activity, 0FFh
+    jne llDone
+
+    cmp al, MOVE_PAGE_UP
+    je llUp
+
+    cmp al, MOVE_PAGE_LEFT
+    je llLeft
+
+    cmp al, MOVE_PAGE_RIGHT
+    je llRight
+
+    cmp al, MOVE_PAGE_DOWN
+    je llDown
+
+llDone:
+
+    ret
+
+llUp:
+    cmp cs:START_Y, TERMINAL_HEIGHT - FRAME_HEIGHT - 1
+    je llDone
+
+    mov cs:MOVED, 04h
+    call StorageBackground
+
+    jmp llDone
+
+llLeft:
+    cmp cs:START_X, TERMINAL_LEN - FRAME_LENGTH
+    je llDone
+
+    mov cs:MOVED, 03h
+    call StorageBackground
+
+    jmp llDone
+
+llRight:
+    cmp cs:START_X, 0h
+    je llDone
+
+    mov cs:MOVED, 02h
+    call StorageBackground
+
+    jmp llDone
+
+llDown:
+    cmp cs:START_Y, 0h
+    je llDone
+
+    mov cs:MOVED, 01h
+    call StorageBackground
+
     jmp llDone
 
 endp
