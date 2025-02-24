@@ -49,18 +49,18 @@ Main:
     mov ax, word ptr es:[bx]
     mov RealTimeCtrlOfs, ax
     mov ax, word ptr es:[bx+2]
-    mov RealTimeCtrlSeg, ax
+    mov RealTimeCtrlSeg, ax             ; Save the address of previous Time Controller
     mov es:[bx], offset TimeControl
-    mov es:[bx+2], cs
+    mov es:[bx+2], cs                   ; Load the address of my Time Controller
 
     add bx, 4
 
     mov ax, word ptr es:[bx]
     mov RealKeyCtrlOfs, ax
     mov ax, word ptr es:[bx+2]
-    mov RealKeyCtrlSeg, ax
+    mov RealKeyCtrlSeg, ax              ; Save the address of previous Key Controller
     mov es:[bx], offset KeyControl
-    mov es:[bx+2], cs
+    mov es:[bx+2], cs                   ; Load the address of my Key Controller
 
     sti                                 ; End of changing
 
@@ -68,7 +68,7 @@ Main:
     mov dx, TERMINAL_LEN * TERMINAL_HEIGHT * 2 + offset END_LABEL
     shr dx, 4
     inc dx
-    int 21h
+    int 21h                             ; Stop and stay resident
 
 ; --------------------
 
@@ -80,33 +80,33 @@ KeyControl proc
 
     in al, 60h
 
-    call CheckOpenFile
+    call CheckOpenFile                  ; Load the screen if file was opened or closed
 
     cmp cs:Shift_pressed, 0h
-    je llDontMove
+    je llDontMove                       ; Move only if shift is pressed
 
     call CheckMovement
     cmp cs:MOVED, 0h
-    jne llSkip
+    jne llSkip                          ; If the frame was moved don't show the SCAN CODE to Volkov Commander
 
 llDontMove:
 
-    call CheckPageMovement
+    call CheckPageMovement              ; Draw the screen if the page was moved
 
-    call CheckShift
+    call CheckShift                     ; Check if shift was pressed
 
-    call CheckHotKey
+    call CheckHotKey                    ; Start or stop working with frame
 
     pop cx bx ax
 
-    db 0eah
+    db 0eah                             ; Jump to real Key Controller
 RealKeyCtrlOfs dw 0h
 RealKeyCtrlSeg dw 0h
 
 llSkip:
     mov cs:MOVED, 0h
 
-    in al, 61h
+    in al, 61h                          ; Show that SCAN CODE was analyzed
     mov ah, al
     or al, 80h
     out 61h, al
@@ -114,7 +114,7 @@ llSkip:
     out 61h, al
 
     mov al, 20h
-    out 20h, al
+    out 20h, al                         ; Show that interrupt was done
 
     pop cx bx ax
 
@@ -136,15 +136,15 @@ endp
 CheckOpenFile proc
 
     cmp al, ESC_SCAN_CODE
-    je llNewBackGround
+    je llNewBackGround                      ; Check if ESC was pressed
 
     cmp al, F4_SCAN_CODE
-    je llNewBackGround
+    je llNewBackGround                      ; Check if F4 was pressed
 
 llDone:
     ret
 
-llNewBackGround:
+llNewBackGround:                            ; Show that the frame isn't on the screen
     mov cs:First_print, 0FFh
     jmp llDone
 
@@ -165,18 +165,18 @@ CheckHotKey proc
 
     mov bx, offset Letter_D
 
-    cmp al, cs:[bx]
+    cmp al, cs:[bx]                         ; Check if letter D was pressed
     je llChange_letter_activity
 
     add bx, 02h
-    cmp al, cs:[bx]
+    cmp al, cs:[bx]                         ; Check if letter E was pressed
     je llChange_letter_activity
 
     add bx, 02h
-    cmp al, cs:[bx]
+    cmp al, cs:[bx]                         ; Check if letter N was pressed
     je llChange_letter_activity
 
-    jmp llDestroy_letter_activity
+    jmp llDestroy_letter_activity           ; Another key was pressed
 
 llDone:
 
@@ -197,25 +197,25 @@ llChange_letter_activity:
     add bx, 02h
     add cl, cs:[bx]
 
-    cmp cl, 0FFh - 02h
+    cmp cl, 0FFh - 02h                      ; Check if sum of values of pressed keys is correct
     jne llDone
 
 llChange_activity:
-    xor cs:Activity, 0FFh
+    xor cs:Activity, 0FFh                   ; Change activity
 
     cmp cs:Activity, 0h
-    je llStart_frame_pos
+    je llStart_frame_pos                    ; If the frame was stopped turn it to the start coordinates and draw the back of the frame
 
     jmp llDone
 
 llStart_frame_pos:
-    mov cs:MOVED, 05h
+    mov cs:MOVED, 05h                       ; Draw the background
     call StorageBackground
     mov cs:MOVED, 0h
 
-    mov cs:First_print, 0FFh
+    mov cs:First_print, 0FFh                ; Show that the frame isn't on the screen
 
-    mov cs:START_X, START_X_COOR
+    mov cs:START_X, START_X_COOR            ; Move it to the starting coordinates
     mov cs:START_Y, START_Y_COOR
 
     jmp llDone
@@ -309,37 +309,37 @@ llDone:
     ret
 
 llUp:
-    cmp cs:START_Y, TERMINAL_HEIGHT - FRAME_HEIGHT - 1
+    cmp cs:START_Y, TERMINAL_HEIGHT - FRAME_HEIGHT - 1          ; Check if the frame on the bottom of the screen
     je llDone
 
-    mov cs:MOVED, 04h
+    mov cs:MOVED, 04h                                           ; The frame was moved to the upside
     call StorageBackground
 
     jmp llDone
 
 llLeft:
-    cmp cs:START_X, TERMINAL_LEN - FRAME_LENGTH
+    cmp cs:START_X, TERMINAL_LEN - FRAME_LENGTH                 ; Check if the frame at right border of the screen
     je llDone
 
-    mov cs:MOVED, 03h
+    mov cs:MOVED, 03h                                           ; The frame was moved to the left side
     call StorageBackground
 
     jmp llDone
 
 llRight:
-    cmp cs:START_X, 0h
+    cmp cs:START_X, 0h                                          ; Check if the frame at the left border of the screen
     je llDone
 
-    mov cs:MOVED, 02h
+    mov cs:MOVED, 02h                                           ; The frame was moved to the right side
     call StorageBackground
 
     jmp llDone
 
 llDown:
-    cmp cs:START_Y, 0h
+    cmp cs:START_Y, 0h                                          ; Check if the frame on the top of the screen
     je llDone
 
-    mov cs:MOVED, 01h
+    mov cs:MOVED, 01h                                           ; The frame was moved to the downside
     call StorageBackground
 
     jmp llDone
@@ -359,7 +359,7 @@ endp
 
 CheckMovement proc
 
-    cmp cs:Activity, 0FFh
+    cmp cs:Activity, 0FFh                                       ; If the frame is inactive don't move it
     jne llDone
 
     cmp al, MOVE_UP
@@ -379,40 +379,40 @@ llDone:
     ret
 
 llUp:
-    cmp cs:START_Y, 0h
+    cmp cs:START_Y, 0h                                      ; Check if the frame on the top of the screen
     je llDone
 
-    mov cs:MOVED, 01h
+    mov cs:MOVED, 01h                                       ; The frame was moved to the downside
     call StorageBackground
 
     dec cs:START_Y
     jmp llDone
 
 llLeft:
-    cmp cs:START_X, 0h
+    cmp cs:START_X, 0h                                      ; Check if the frame at the left border of the screen
     je llDone
 
-    mov cs:MOVED, 02h
+    mov cs:MOVED, 02h                                       ; The frame was moved to the right side
     call StorageBackground
 
     dec cs:START_X
     jmp llDone
 
 llRight:
-    cmp cs:START_X, TERMINAL_LEN - FRAME_LENGTH
+    cmp cs:START_X, TERMINAL_LEN - FRAME_LENGTH             ; Check if the frame at right border of the screen
     je llDone
 
-    mov cs:MOVED, 03h
+    mov cs:MOVED, 03h                                       ; The frame was moved to the left side
     call StorageBackground
 
     inc cs:START_X
     jmp llDone
 
 llDown:
-    cmp cs:START_Y, TERMINAL_HEIGHT - FRAME_HEIGHT - 1
+    cmp cs:START_Y, TERMINAL_HEIGHT - FRAME_HEIGHT - 1      ; Check if the frame on the bottom of the screen
     je llDone
 
-    mov cs:MOVED, 04h
+    mov cs:MOVED, 04h                                       ; The frame was moved to the left side
     call StorageBackground
 
     inc cs:START_Y
@@ -433,16 +433,16 @@ MOVED db 0h
 
 TimeControl proc
 
-    cmp cs:Activity, 0h
+    cmp cs:Activity, 0h                                     ; If the frame is inactive don't do anything
     je llRealTimeCtrl
 
 llComplete:
 
-    call MyTimeCtrl
+    call MyTimeCtrl                                         ; My Time Controller
 
 llRealTimeCtrl:
 
-    db 0eah
+    db 0eah                                                 ; Jump to real Time Controller
 RealTimeCtrlOfs dw 0h
 RealTimeCtrlSeg dw 0h
 
@@ -459,17 +459,17 @@ Activity db 0h
 MyTimeCtrl proc
 
     cmp cs:First_print, 0FFh
-    jne llComplete
+    jne llComplete                                          ; Check if the frame is on the screen
 
-    call LoadBackground
+    call LoadBackground                                     ; Load the screen
     mov cs:First_print, 0h
 
 llComplete:
-    call RegistersValue
+    call RegistersValue                                     ; Put registers' values to the text
 
     push ax bx cx dx es si di
 
-    call MakeFrame
+    call MakeFrame                                          ; Draw the frame
 
     pop di si es dx cx bx ax
 
@@ -507,7 +507,7 @@ LoadBackground  proc
 
     mov di, offset Background
 
-rep movsw
+rep movsw                                       ; Load the screen
 
     pop di si es ds cx ax
 
@@ -539,7 +539,7 @@ StorageBackground  proc
     shl ax, 01h
     add bx, ax
     mov bx, cs:[bx]
-    jmp bx
+    jmp bx                                          ; Jump to the label with number in CS:MOVED
 
 llComplete:
 
@@ -558,7 +558,7 @@ llComplete:
 llWhile:
     mov cx, FRAME_LENGTH
 
-rep movsw
+rep movsw                                           ; Draw the line of the frame
 
     add si, TERMINAL_LEN * 2 - FRAME_LENGTH * 2
     add di, TERMINAL_LEN * 2 - FRAME_LENGTH * 2
@@ -569,6 +569,10 @@ rep movsw
     pop di si es ds cx bx ax
 
     ret
+
+;-----------------------------------------------
+; AX pointed on the first printed symbol
+;-----------------------------------------------
 
 UpMovement:
 
@@ -706,7 +710,8 @@ RegistersValue  proc
 
 ;---------------SP-----------------
     mov ax, sp
-    sub ax, 05h
+    sub ax, 05h * 2                     ; 5 = return value of RegistersValue | return value of MyTimeCtrl | IP | CS
+                                        ; every element have size of 2 bytes
     mov di, offset Str_sp + 05h
     call ValToStr
 ;---------------------------------
@@ -762,8 +767,10 @@ Save_di dw 0h
 Save_ip dw 0h
 Save_cs dw 0h
 
-Save_ret_val_RV   dw 0h
-Save_ret_val_MYTC dw 0h
+Save_ret_val_RV   dw 0h                             ; The returning value of RegistersValue
+Save_ret_val_MYTC dw 0h                             ; The returning value of MyTimeCtrl
+
+;----------------------TEXT------------------------
 
 Str_ax db 'ax = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
 Str_bx db 'bx = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
@@ -783,7 +790,7 @@ Str_cs db 'cs = ', 0FFh, 0FFh, 0FFh, 0FFh, 0Ah
 
 Str_ip db 'ip = ', 0FFh, 0FFh, 0FFh, 0FFh, END_SYM
 
-; --------------------
+; -------------------------------------------------
 
 
 ;---------------------------------
@@ -800,7 +807,7 @@ ValToStr  proc
     push ax
 
     shr ah, 04h
-    call DigitToStr
+    call DigitToStr                     ; Print the first digit of AX
 
     inc di
 
@@ -808,20 +815,20 @@ ValToStr  proc
 
     shl ah, 04h
     shr ah, 04h
-    call DigitToStr
+    call DigitToStr                     ; Print the second digit of AX
 
     inc di
 
     mov ah, al
     shr ah, 04h
-    call DigitToStr
+    call DigitToStr                     ; Print the third digit of AX
 
     inc di
 
     mov ah, al
     shl ah, 04h
     shr ah, 04h
-    call DigitToStr
+    call DigitToStr                     ; Print the fourth digit of AX
 
     sub di, 03h
 
@@ -934,7 +941,7 @@ FramePattern db '/-\| |\-/'
 ;
 ; Entry:  ES, AH, AL, BX, CX
 ; Exit:   None
-; Destrs: AX, CX, DX
+; Destrs: AX, CX, DX, DI
 ;---------------------------------
 
 DrawFrame     proc
@@ -944,7 +951,7 @@ DrawFrame     proc
     mov cs:BotCor, ah
     mov ah, FRAME_COLOR
 
-    call BaseLine
+    call BaseLine                       ; Draw the first line
     inc ch
 
 llCond:
@@ -952,7 +959,7 @@ llCond:
     je llEnd
 
 llFor:
-    call BaseLine
+    call BaseLine                       ; Draw 2nd - (n-1)th line
     inc ch
     sub bx, 03h
 
@@ -960,7 +967,7 @@ llFor:
 
 llEnd:
     add bx, 03h
-    call BaseLine
+    call BaseLine                       ; Draw the last line
 
     ret
 
@@ -977,7 +984,7 @@ BotCor db 0h
 ;
 ; Entry:  ES, CH, CL, BX, AH
 ; Exit:   None
-; Destrs: DX, BX (inc x3)
+; Destrs: DX, BX (inc x3), DI
 ;---------------------------------
 
 BaseLine     proc
@@ -999,30 +1006,23 @@ BaseLine     proc
     shl dx, 01h                     ; dx = (ch * 80 + cl) * 2
 
     mov di, dx
-    add dx, FRAME_LENGTH * 2 - 2
 
     mov al, cs:[bx]
-    stosw
+    stosw                           ; Draw the first symbol of the line
 
     inc bx
     mov al, cs:[bx]
 
-llCond:
-    cmp di, dx
-    je llFor_end
-
-llFor:
-    stosw
-
-    jmp llCond
-
-llFor_end:
-    inc bx
-    mov al, cs:[bx]
-
-    stosw
+    push cx
+    mov cx, FRAME_LENGTH - 2
+    rep stosw                       ; Draw other symbols (without the last symbol)
+    pop cx
 
     inc bx
+    mov al, cs:[bx]                 ; Draw the last symbol
+    stosw
+
+    inc bx                          ; BX pointed on the next line pattern
 
     ret
 
@@ -1065,14 +1065,14 @@ PrintText     proc
     mov ds, ax
     mov ax, 0h
 llCond:
-    cmp byte ptr cs:[si], END_SYM
+    cmp byte ptr cs:[si], END_SYM      ; Check if it is the end
     je llEnd
-    cmp byte ptr cs:[si], 0Ah          ; \n
+    cmp byte ptr cs:[si], 0Ah          ; Check if it is a new line ('\n')
     je llNewLine
 
 llWhile:
     inc ax
-    movsb
+    movsb                              ; Print the symbol of the text
     inc di
 
     jmp llCond
