@@ -17,3 +17,7 @@ FRAME_~3.COM
 FRAME_~3.LST
 FRAME_~3.MAP
 FRAME_~3.OBJ
+
+frame.asm
+frame_v2.asm
+frame_mouse.asm
